@@ -1,0 +1,42 @@
+{
+    "name": "soden46/garudacrypt",
+    "description": "garudacrypt is an installation package for data encryption purposes using cryptographic methods",
+    "type": "library",
+    "license": "MIT",
+    "homepage": "https://github.com/soden46/garudacrypt",
+    "keywords": [
+        "laravel", "encrypt", "decrypt", "encryption", "decryption",
+        "cbc", "php", "file", "garudacrypt", "crypto"
+    ],
+    "authors": [{
+        "name": "Syarif Syarifuddin",
+        "email": "syarifsoden22@gmail.com"
+    }],
+    "require": {
+        "spatie/laravel-permission": "^5.5",
+        "php": "^7.2||^8.0",
+        "guzzlehttp/guzzle": "^7.0.1",
+        "illuminate/support": "5.8.* || 6.*.* || ^7.0 || ^8.0"
+
+    },
+    "require-dev": {
+        "php-http/client-integration-tests": "^3.0",
+        "orchestra/testbench": "^5.0|^6.0|^7.0",
+        "phpunit/phpunit": "^7.2||^8.0.2"
+    },
+    "autoload": {
+        "psr-4": {
+            "Soden46\\Garudacrypt\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Soden46\\Garudacrypt\\GarudaCryptServiceProvider"
+            ],
+            "aliases": {
+                "Garudacrypt": "Soden46\\Garudacrypt\\Facades\\Garudacrypt"
+            }
+        }
+    }
+}
