@@ -28,7 +28,7 @@
     },
     "autoload": {
         "psr-4": {
-            "Soden46\\Garudacrypt\\": "src/"
+            "Soden46\\Garudacrypt\\": "src"
         }
     },
     "autoload-dev": {
