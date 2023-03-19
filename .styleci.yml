@@ -1,10 +1,4 @@
 preset: laravel
 
-enabled:
-  - align_double_arrow
-  - align_equals
-  - no_useless_else
-
 disabled:
-  - concat_without_spaces
-  - unalign_equals
+  - single_class_element_per_statement

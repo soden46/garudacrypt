@@ -2,27 +2,229 @@
 
 namespace Soden46\GarudaCrypt;
 
-use Illuminate\Encryption\Encrypter;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Filesystem\FilesystemManager;
+use Illuminate\Filesystem\FilesystemServiceProvider;
+
 
 class GarudaCrypt
 {
-    protected string $cipher = 'AES-256-CBC';
+    /**
+     * The storage disk.
+     *
+     * @var string
+     */
+    public $disk;
 
-    public static function make(): Encrypter
+    /**
+     * The encryption key.
+     *
+     * @var string
+     */
+    protected String $key;
+
+    /**
+     * The algorithm used for encryption.
+     *
+     * @var string
+     */
+    protected $sha;
+
+    /**
+     * The algorithm used for encryption.
+     *
+     * @var string
+     */
+    protected $cipher;
+
+    /**
+     * The storage adapter.
+     *
+     * @var
+     */
+    protected $adapter;
+
+    public function __construct()
     {
-        $factory = new self;
-
-        return new Encrypter($factory->key(), $factory->cipher);
+        $this->disk = config('garuda-crypt.disk');
+        $this->key = config('garuda-crypt.key');
+        $this->sha = config('garuda-crypt.sha');
+        $this->cipher = config('garuda-crypt.cipher');
     }
 
-    protected function key(): string
+    /**
+     * Set the disk where the files are located.
+     *
+     * @param  string  $disk
+     * @return $this
+     */
+    public function disk($disk)
     {
-        $key = config('garuda.key');
-        if (Str::contains($key, 'base64:')) {
-            $key = substr($key, 9);
+        $this->disk = $disk;
+
+        return $this;
+    }
+
+    /**
+     * Set the encryption key.
+     *
+     * @param  string  $key
+     * @return $this
+     */
+    public function key($key)
+    {
+        $this->key = $key;
+
+        return $this;
+    }
+
+    /**
+     * Set the encryption sha.
+     *
+     * @param  string  $sha
+     * @return $this
+     */
+    public function sha($sha)
+    {
+        $this->sha = $sha;
+
+        return $this;
+    }
+
+    public function adapter($adapter)
+    {
+        $this->adapter = $adapter;
+
+        return $this;
+    }
+
+
+    /**
+     * Create a new encryption key for the given cipher.
+     *
+     * @return string
+     */
+    public static function generateKey()
+    {
+        return random_bytes(config('garuda-crypt.cipher') === 'AES-128-CBC' ? 16 : 32);
+    }
+
+    /**
+     * Encrypt the passed file and saves the result in a new file with ".enc" as suffix.
+     *
+     * @param string $sourceFile Path to file that should be encrypted, relative to the storage disk specified
+     * @param string $destFile   File name where the encryped file should be written to, relative to the storage disk specified
+     * @param string  $key
+     * @param string  $cipher
+     * @return $this
+     */
+    public function encrypt($sourceFile, $cipher, $key,  $destFile = null, $deleteSource = true)
+    {
+        $this->registerServices();
+
+        if (is_null($destFile)) {
+            $destFile = "{$sourceFile}.enc";
         }
 
-        return base64_decode($key);
+        $sourcePath = $this->getFilePath($sourceFile);
+        $destPath = $this->getFilePath($destFile);
+
+        // Create a new encrypter instance
+        $encrypter = new GarudaEncrypter($this->key, $this->cipher, $this->sha);
+
+        // If encryption is successful, delete the source file
+        if ($encrypter->encrypt($sourcePath, $destPath) && $deleteSource) {
+            Storage::disk($this->disk)->delete($sourceFile);
+        }
+
+        return $this;
+    }
+
+    public function encryptCopy($sourceFile, $destFile = null)
+    {
+        return self::encrypt($sourceFile, $destFile, false);
+    }
+
+    /**
+     * Dencrypt the passed file and saves the result in a new file, removing the
+     * last 4 characters from file name.
+     *
+     * @param string $sourceFile Path to file that should be decrypted
+     * @param string $destFile   File name where the decryped file should be written to.
+     * @return $this
+     */
+    public function decrypt($sourceFile, $destFile = null, $deleteSource = true)
+    {
+        $this->registerServices();
+
+        if (is_null($destFile)) {
+            $destFile = Str::endsWith($sourceFile, '.enc')
+                ? Str::replaceLast('.enc', '', $sourceFile)
+                : $sourceFile . '.dec';
+        }
+
+        $sourcePath = $this->getFilePath($sourceFile);
+        $destPath = $this->getFilePath($destFile);
+
+        // Create a new encrypter instance
+        $encrypter = new GarudaEncrypter($this->key, $this->cipher, $this->sha);
+
+        // If decryption is successful, delete the source file
+        if ($encrypter->decrypt($sourcePath, $destPath) && $deleteSource) {
+            Storage::disk($this->disk)->delete($sourceFile);
+        }
+
+        return $this;
+    }
+
+    public function decryptCopy($sourceFile, $destFile = null)
+    {
+        return self::decrypt($sourceFile, $destFile, false);
+    }
+
+    public function streamDecrypt($sourceFile)
+    {
+        $this->registerServices();
+
+        $sourcePath = $this->getFilePath($sourceFile);
+
+        // Create a new encrypter instance
+        $encrypter = new GArudaEncrypter($this->key, $this->cipher, $this->sha);
+
+        return $encrypter->decrypt($sourcePath, 'php://output');
+    }
+
+    protected function getFilePath($file)
+    {
+        if ($this->isS3File()) {
+            return "s3://{$this->adapter->getBucket()}/{$file}";
+        }
+
+        return Storage::disk($this->disk)->path($file);
+    }
+
+    protected function isS3File()
+    {
+        return $this->disk == 's3';
+    }
+
+    protected function setAdapter()
+    {
+        if ($this->adapter) {
+            return;
+        }
+
+        $this->adapter = Storage::disk($this->disk)->getAdapter();
+    }
+
+    protected function registerServices()
+    {
+        $this->setAdapter();
+
+        if ($this->isS3File()) {
+            $client = $this->adapter->getClient();
+            $client->registerStreamWrapper();
+        }
     }
 }

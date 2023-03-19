@@ -14,13 +14,13 @@ use Soden46\GarudaCrypt\Hash\Hasher;
  * Class GarudaEncrypter
  * @package Soden46\GarudaCrypt
  */
-class GarudaCrypter
+class GarudaEncrypter
 {
     /**
      * Define the number of blocks that should be read from the source file for each chunk.
      * We chose 255 because on decryption we want to read chunks of 4kb ((255 + 1)*16).
      */
-    protected const FILE_ENCRYPTION_BLOCKS = 255;
+    protected const GARUDA_ENCRYPTION_BLOCKS = 255;
 
     /**
      * The encryption key.
@@ -34,7 +34,7 @@ class GarudaCrypter
      *
      * @var string
      */
-    protected $cipherAES;
+    protected $cipher = 'AES-128-CBC';
     /**
      * @var string
      */
@@ -49,46 +49,47 @@ class GarudaCrypter
      * Create a new encrypter instance.
      *
      * @param  string  $key
-     * @param  string  $cipherAES
+     * @param  string  $cipher
+     * @param  string  $sha
      * @return void
      *
      * @throws \RuntimeException
      */
-    public function __construct($key, $cipherAES = 'AES-128-CBC', $cipherBF, $sha)
+    public function __construct($key, $cipher, $sha)
     {
         // If the key starts with "base64:", we will need to decode the key before handing
         // it off to the encrypter. Keys may be base-64 encoded for presentation and we
         // want to make sure to convert them back to the raw bytes before encrypting.
-        $this->sha = $sha;
+        // If the key starts with "base64:", we will need to decode the key before handing
+        // it off to the encrypter. Keys may be base-64 encoded for presentation and we
+        // want to make sure to convert them back to the raw bytes before encrypting.
         if (Str::startsWith($key, 'base64:')) {
             $key = base64_decode(substr($key, 7));
-        } else {
-            $hash = new Hasher();
-            $key = $hash->create($key, $sha);
         }
 
-        $this->cipherBF = $cipherBF;
-
-        if (static::supported($key, $cipherAES)) {
+        if (static::supported($key, $cipher, $sha)) {
             $this->key = $key;
-            $this->cipherAES = $cipherAES;
+            $this->cipher = $cipher;
+            $this->sha = $sha;
         } else {
             throw new RuntimeException('The only supported ciphers are AES-128-CBC and AES-256-CBC with the correct key lengths.');
         }
     }
 
     /**
-     * Determine if the given key and cipher combination is valid.
+     * Determine if the given key, cipher and sha combination is valid.
      *
      * @param  string  $key
-     * @param  string  $cipherAES
+     * @param  string  $cipher
+     * @param  string  $sha
      * @return bool
      */
-    public static function supported($key, $cipherAES)
+    public static function supported($key, $cipher, $sha)
     {
         $length = mb_strlen($key, '8bit');
-        return ($cipherAES === 'AES-128-CBC' && $length === 16) ||
-            ($cipherAES === 'AES-256-CBC' && $length === 32);
+        $length2 = mb_strlen($sha, '8bit');
+        return ($cipher === 'AES-128-CBC' && $length === 16 && $length2 === 16) ||
+            ($cipher === 'AES-256-CBC' && $length === 32 && $length2 === 32);
     }
 
     /**
@@ -107,26 +108,26 @@ class GarudaCrypter
         $iv = openssl_random_pseudo_bytes(16);
         fwrite($fpOut, $iv);
 
-        $numberOfChunks = ceil(filesize($sourcePath) / (16 * self::FILE_ENCRYPTION_BLOCKS));
+        $numberOfChunks = ceil(filesize($sourcePath) / (16 * self::GARUDA_ENCRYPTION_BLOCKS));
 
         $i = 0;
         while (!feof($fpIn)) {
 
-            $plaintext = fread($fpIn, 16 * self::FILE_ENCRYPTION_BLOCKS);
+            $plaintext = fread($fpIn, 16 * self::GARUDA_ENCRYPTION_BLOCKS);
             $hasher = new Hasher();
             $ivBF = $hasher->joaat($this->sha);
 
-            $bf = openssl_encrypt($plaintext, $this->cipherBF, $this->key, OPENSSL_RAW_DATA, $ivBF);
-            $ciphertext = openssl_encrypt($bf, $this->cipherAES, $this->key, OPENSSL_RAW_DATA, $iv);
+            $bf = openssl_encrypt($plaintext, $this->cipherBF, $this->key, $this->sha, OPENSSL_RAW_DATA, $ivBF);
+            $ciphertext = openssl_encrypt($bf, $this->cipher, $this->key, $this->sha, OPENSSL_RAW_DATA, $iv);
 
             // Because Amazon S3 will randomly return smaller sized chunks:
             // Check if the size read from the stream is different than the requested chunk size
             // In this scenario, request the chunk again, unless this is the last chunk
             if (
-                strlen($plaintext) !== 16 * self::FILE_ENCRYPTION_BLOCKS
+                strlen($plaintext) !== 16 * self::GARUDA_ENCRYPTION_BLOCKS
                 && $i + 1 < $numberOfChunks
             ) {
-                fseek($fpIn, 16 * self::FILE_ENCRYPTION_BLOCKS * $i);
+                fseek($fpIn, 16 * self::GARUDA_ENCRYPTION_BLOCKS * $i);
                 continue;
             }
 
@@ -160,23 +161,23 @@ class GarudaCrypter
         $hasher = new Hasher();
         $ivBF = $hasher->joaat($this->sha);
 
-        $numberOfChunks = ceil((filesize($sourcePath) - 16) / (16 * (self::FILE_ENCRYPTION_BLOCKS + 1)));
+        $numberOfChunks = ceil((filesize($sourcePath) - 16) / (16 * (self::GARUDA_ENCRYPTION_BLOCKS + 1)));
         $i = 0;
         while (!feof($fpIn)) {
 
             // We have to read one block more for decrypting than for encrypting because of the initialization vector
-            $ciphertext = fread($fpIn, 16 * (self::FILE_ENCRYPTION_BLOCKS + 1));
-            $plaintext = openssl_decrypt($ciphertext, $this->cipherAES, $this->key, OPENSSL_RAW_DATA, $iv);
-            $bf = openssl_decrypt($plaintext, $this->cipherBF, $this->key, OPENSSL_RAW_DATA, $ivBF);
+            $ciphertext = fread($fpIn, 16 * (self::GARUDA_ENCRYPTION_BLOCKS + 1));
+            $plaintext = openssl_decrypt($ciphertext, $this->cipher, $this->key, $this->sha, OPENSSL_RAW_DATA, $iv);
+            $bf = openssl_decrypt($plaintext, $this->cipherBF, $this->key, $this->sha, OPENSSL_RAW_DATA, $ivBF);
 
             // Because Amazon S3 will randomly return smaller sized chunks:
             // Check if the size read from the stream is different than the requested chunk size
             // In this scenario, request the chunk again, unless this is the last chunk
             if (
-                strlen($ciphertext) !== 16 * (self::FILE_ENCRYPTION_BLOCKS + 1)
+                strlen($ciphertext) !== 16 * (self::GARUDA_ENCRYPTION_BLOCKS + 1)
                 && $i + 1 < $numberOfChunks
             ) {
-                fseek($fpIn, 16 + 16 * (self::FILE_ENCRYPTION_BLOCKS + 1) * $i);
+                fseek($fpIn, 16 + 16 * (self::GARUDA_ENCRYPTION_BLOCKS + 1) * $i);
                 continue;
             }
 

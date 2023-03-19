@@ -1,6 +1,7 @@
 <?php
 
 return [
+
     /*
      * The default key used for all file encryption / decryption
      * This package will look for a SHA256_KEY and GARUDA_CRYPT_KEY in your env file
@@ -19,4 +20,5 @@ return [
      * The Storage disk used by default to locate your files.
      */
     'disk' => 'local',
+    'adapter' => 'disk',
 ];
