@@ -19,7 +19,7 @@
         "illuminate/http": "^7||^8||^9",
         "illuminate/support": "^7||^8||^9",
         "illuminate/view": "^7||^8||^9",
-        "phpunit/php-token-stream": "*",
+        "phpunit/php-token-stream": "^4.0",
         "spatie/laravel-permission": "^5.5"
     },
     "require-dev": {
