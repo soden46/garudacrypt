@@ -16,12 +16,16 @@
         "spatie/laravel-permission": "^5.5",
         "php": "^7.2||^8.0",
         "guzzlehttp/guzzle": "^7.0.1",
-        "illuminate/support": "5.8.* || 6.*.* || ^7.0 || ^8.0"
+        "illuminate/filesystem": "5.8.*|^6|^7|^8|^9",
+        "illuminate/http": "5.8.*|^6|^7|^8|^9",
+        "illuminate/support": "5.8.*|^6|^7|^8|^9",
+        "illuminate/view": "5.8.*|^6|^7|^8|^9"
+
 
     },
     "require-dev": {
         "php-http/client-integration-tests": "^3.0",
-        "orchestra/testbench": "^5.0|^6.0|^7.0",
+        "orchestra/testbench": "^3.8|^4.0|^5.0|^6.0|^7.0",
         "phpunit/phpunit": "^7.2||^8.0.2"
     },
     "autoload": {
@@ -38,5 +42,14 @@
                 "Garudacrypt": "Soden46\\Garudacrypt\\Facades\\Garudacrypt"
             }
         }
-    }
+    },
+    "config": {
+        "sort-packages": true
+    },
+    "scripts": {
+        "test": "vendor/bin/phpunit"
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+
 }
